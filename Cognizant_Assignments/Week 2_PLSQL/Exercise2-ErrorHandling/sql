@@ -1,0 +1,106 @@
+-- Scenario 1: Handle Exceptions During Fund Transfers Between Accounts
+CREATE OR REPLACE PROCEDURE SafeTransferFunds(
+    p_from_account IN NUMBER,
+    p_to_account IN NUMBER,
+    p_amount IN NUMBER
+) IS
+    v_from_balance NUMBER;
+    v_to_balance NUMBER;
+BEGIN
+    -- Start a transaction
+    SAVEPOINT start;
+
+    -- Check if from_account has enough balance
+    SELECT balance INTO v_from_balance
+    FROM accounts
+    WHERE account_id = p_from_account FOR UPDATE;
+
+    IF v_from_balance < p_amount THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Insufficient funds.');
+    END IF;
+
+    -- Deduct the amount from the source account
+    UPDATE accounts
+    SET balance = balance - p_amount
+    WHERE account_id = p_from_account;
+
+    -- Add the amount to the destination account
+    UPDATE accounts
+    SET balance = balance + p_amount
+    WHERE account_id = p_to_account;
+
+    -- Commit the transaction
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Funds transferred successfully.');
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Rollback in case of an error
+        ROLLBACK TO start;
+        -- Log the error
+        DBMS_OUTPUT.PUT_LINE('Error during fund transfer: ' || SQLERRM);
+END SafeTransferFunds;
+/
+
+-- Scenario 2: Manage Errors When Updating Employee Salaries
+CREATE OR REPLACE PROCEDURE UpdateSalary(
+    p_employee_id IN NUMBER,
+    p_percentage IN NUMBER
+) IS
+    v_current_salary NUMBER;
+BEGIN
+    -- Start a transaction
+    SAVEPOINT start;
+
+    -- Check if the employee exists
+    SELECT salary INTO v_current_salary
+    FROM employees
+    WHERE employee_id = p_employee_id FOR UPDATE;
+
+    -- Update salary
+    UPDATE employees
+    SET salary = salary + (salary * p_percentage / 100)
+    WHERE employee_id = p_employee_id;
+
+    -- Commit the transaction
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Salary updated successfully.');
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- Handle the case where the employee ID does not exist
+        DBMS_OUTPUT.PUT_LINE('Error: Employee ID does not exist.');
+    WHEN OTHERS THEN
+        -- Rollback in case of other errors
+        ROLLBACK TO start;
+        -- Log the error
+        DBMS_OUTPUT.PUT_LINE('Error during salary update: ' || SQLERRM);
+END UpdateSalary;
+/
+
+-- Scenario 3: Ensure Data Integrity When Adding a New Customer
+CREATE OR REPLACE PROCEDURE AddNewCustomer(
+    p_customer_id IN NUMBER,
+    p_customer_name IN VARCHAR2,
+    p_customer_email IN VARCHAR2
+) IS
+BEGIN
+    -- Start a transaction
+    SAVEPOINT start;
+
+    -- Attempt to insert a new customer
+    INSERT INTO customers (customer_id, customer_name, customer_email)
+    VALUES (p_customer_id, p_customer_name, p_customer_email);
+
+    -- Commit the transaction
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Customer added successfully.');
+EXCEPTION
+    WHEN DUP_VAL_ON_INDEX THEN
+        -- Handle the case where the customer ID already exists
+        DBMS_OUTPUT.PUT_LINE('Error: Customer with this ID already exists.');
+    WHEN OTHERS THEN
+        -- Rollback in case of other errors
+        ROLLBACK TO start;
+        -- Log the error
+        DBMS_OUTPUT.PUT_LINE('Error during customer insertion: ' || SQLERRM);
+END AddNewCustomer;
+/
